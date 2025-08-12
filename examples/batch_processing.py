@@ -3,11 +3,11 @@
 import time
 import concurrent.futures
 from typing import List, Dict, Any, Tuple
-from ai_spine import AISpine, AISpineError
+from ai_spine import Client, AISpineError, InsufficientCreditsError
 
 
 def process_single_item(
-    client: AISpine,
+    client: Client,
     flow_id: str,
     item: Dict[str, Any]
 ) -> Tuple[str, Dict[str, Any]]:
@@ -37,15 +37,22 @@ def process_single_item(
             "execution_id": result.get("execution_id")
         }
     
+    except InsufficientCreditsError as e:
+        return item_id, {
+            "status": "error",
+            "error": f"Insufficient credits: {e}",
+            "error_type": "insufficient_credits"
+        }
     except AISpineError as e:
         return item_id, {
             "status": "error",
-            "error": str(e)
+            "error": str(e),
+            "error_type": "general"
         }
 
 
 def batch_process_sequential(
-    client: AISpine,
+    client: Client,
     flow_id: str,
     items: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
@@ -83,7 +90,7 @@ def batch_process_sequential(
 
 
 def batch_process_parallel(
-    client: AISpine,
+    client: Client,
     flow_id: str,
     items: List[Dict[str, Any]],
     max_workers: int = 3
@@ -137,8 +144,23 @@ def batch_process_parallel(
 
 
 def main():
-    # Initialize client
-    client = AISpine()
+    # Initialize client with API key
+    client = Client(api_key="sk_your_api_key_here")
+    
+    # Check credits before processing batch
+    try:
+        credits = client.check_credits()
+        print(f"Available credits: {credits}")
+        
+        # Estimate required credits (assuming 1 credit per item)
+        estimated_credits = 5  # We have 5 items in the batch
+        
+        if credits < estimated_credits:
+            print(f"Warning: You may not have enough credits for all items.")
+            print(f"Required: ~{estimated_credits}, Available: {credits}")
+            print("Consider topping up at https://ai-spine.com/billing")
+    except Exception as e:
+        print(f"Could not check credits: {e}")
     
     # Prepare batch data
     batch_items = [
