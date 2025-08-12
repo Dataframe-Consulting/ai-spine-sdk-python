@@ -1,19 +1,23 @@
 """Error handling examples for AI Spine SDK."""
 
 from ai_spine import (
-    AISpine,
+    Client,
     AISpineError,
     ValidationError,
     ExecutionError,
     TimeoutError,
     RateLimitError,
     AuthenticationError,
+    InsufficientCreditsError,
 )
 
 
 def main():
-    # Initialize client
-    client = AISpine(debug=True)  # Enable debug mode for more details
+    # Initialize client with API key
+    client = Client(
+        api_key="sk_your_api_key_here",
+        debug=True  # Enable debug mode for more details
+    )
     
     # Example 1: Handle validation errors
     print("Example 1: Handling validation errors")
@@ -67,21 +71,39 @@ def main():
                 flows = client.list_flows()
                 print("Retry successful")
     
-    # Example 4: Handle authentication errors
-    print("\nExample 4: Handling authentication errors")
+    # Example 4: Handle insufficient credits
+    print("\nExample 4: Handling insufficient credits")
+    print("-" * 50)
+    
+    try:
+        # This might fail if user has no credits
+        result = client.execute_flow(
+            flow_id="expensive-flow",
+            input_data={"data": "test"}
+        )
+    except InsufficientCreditsError as e:
+        print(f"Insufficient credits: {e}")
+        if e.credits_needed:
+            print(f"Credits needed: {e.credits_needed}")
+        if e.credits_available is not None:
+            print(f"Credits available: {e.credits_available}")
+        print("Top up at https://ai-spine.com/billing")
+    
+    # Example 5: Handle authentication errors
+    print("\nExample 5: Handling authentication errors")
     print("-" * 50)
     
     # Create client with invalid API key
-    auth_client = AISpine(api_key="invalid-key")
+    auth_client = Client(api_key="invalid-key")
     
     try:
         auth_client.list_flows()
     except AuthenticationError as e:
         print(f"Authentication failed: {e}")
-        print("Please check your API key")
+        print("Get your API key from https://ai-spine.com/dashboard")
     
-    # Example 5: Generic error handling
-    print("\nExample 5: Generic error handling with retry")
+    # Example 6: Generic error handling
+    print("\nExample 6: Generic error handling with retry")
     print("-" * 50)
     
     def execute_with_retry(client, flow_id, input_data, max_retries=3):
@@ -114,12 +136,12 @@ def main():
     except AISpineError as e:
         print(f"Final failure: {e}")
     
-    # Example 6: Context manager for automatic cleanup
-    print("\nExample 6: Using context manager")
+    # Example 7: Context manager for automatic cleanup
+    print("\nExample 7: Using context manager")
     print("-" * 50)
     
     try:
-        with AISpine() as context_client:
+        with Client(api_key="sk_your_api_key_here") as context_client:
             # Client will automatically close even if error occurs
             result = context_client.health_check()
             print(f"Health check: {result}")

@@ -3,6 +3,7 @@
 import json
 import logging
 import time
+import warnings
 from typing import Optional, Dict, Any, List
 
 import requests
@@ -30,6 +31,7 @@ from ai_spine.exceptions import (
     RateLimitError,
     NetworkError,
     APIError,
+    InsufficientCreditsError,
 )
 from ai_spine.utils import (
     validate_flow_id,
@@ -48,28 +50,34 @@ class AISpine:
     """AI Spine SDK client for Python.
     
     Args:
-        api_key: Optional API key for authentication
+        api_key: API key for authentication (required)
         base_url: API base URL (defaults to production)
         timeout: Request timeout in seconds (default: 30)
         max_retries: Maximum number of retry attempts (default: 3)
         debug: Enable debug logging (default: False)
     
     Example:
-        >>> client = AISpine()
+        >>> client = AISpine(api_key="sk_your_api_key_here")
         >>> result = client.execute_flow('credit_analysis', {'amount': 50000})
         >>> execution = client.wait_for_execution(result['execution_id'])
     """
     
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str,
         base_url: Optional[str] = None,
         timeout: int = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         debug: bool = False
     ):
+        # Validate API key
+        if not api_key:
+            raise ValueError("API key is required")
+        if not api_key.startswith("sk_"):
+            warnings.warn("API key should start with 'sk_'. Make sure you're using a valid user key.")
+        
         self.api_key = api_key
-        self.base_url = base_url or DEFAULT_BASE_URL
+        self.base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
         self.timeout = timeout
         self.debug = debug
         
@@ -86,12 +94,17 @@ class AISpine:
         session = requests.Session()
         
         # Add retry strategy
-        retry_strategy = Retry(
-            total=max_retries,
-            backoff_factor=1,
-            status_forcelist=RETRY_STATUS_CODES,
-            allowed_methods=["GET", "POST", "PUT", "DELETE"],
-        )
+        if max_retries > 0:
+            retry_strategy = Retry(
+                total=max_retries,
+                backoff_factor=1,
+                status_forcelist=RETRY_STATUS_CODES,
+                allowed_methods=["GET", "POST", "PUT", "DELETE"],
+            )
+        else:
+            # No retries - don't use status_forcelist
+            retry_strategy = Retry(total=0, read=0, connect=0)
+        
         adapter = HTTPAdapter(max_retries=retry_strategy)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
@@ -99,10 +112,9 @@ class AISpine:
         # Set default headers
         headers = DEFAULT_HEADERS.copy()
         headers["User-Agent"] = f"ai-spine-sdk-python/{__version__}"
+        headers["Authorization"] = f"Bearer {self.api_key}"
+        headers["Content-Type"] = "application/json"
         session.headers.update(headers)
-        
-        if self.api_key:
-            session.headers["Authorization"] = f"Bearer {self.api_key}"
             
         return session
     
@@ -181,18 +193,24 @@ class AISpine:
         try:
             error_data = response.json()
             message = error_data.get("message", response.text)
-            details = error_data.get("details", {})
+            details = error_data.get("details", error_data)  # Use full error_data as details if no explicit details field
         except json.JSONDecodeError:
             message = response.text or f"HTTP {response.status_code}"
             details = {}
         
         if response.status_code == 401:
-            raise AuthenticationError(message, details)
+            raise AuthenticationError("Invalid API key. Get your key from https://ai-spine.com/dashboard", details)
+        elif response.status_code == 403:
+            # Check if it's specifically a credits issue
+            error_code = details.get("error_code", "").upper() if isinstance(details, dict) else ""
+            if "INSUFFICIENT_CREDITS" in error_code or "credits" in message.lower():
+                raise InsufficientCreditsError("No credits remaining. Top up at https://ai-spine.com/billing", details)
+            raise APIError(message, status_code=response.status_code, response_body=response.text, details=details)
         elif response.status_code == 400:
             raise ValidationError(message, details)
         elif response.status_code == 429:
             retry_after = response.headers.get("Retry-After")
-            raise RateLimitError(message, retry_after=int(retry_after) if retry_after else None, details=details)
+            raise RateLimitError("Rate limit exceeded. Please wait before retrying.", retry_after=int(retry_after) if retry_after else None, details=details)
         elif response.status_code >= 500:
             raise APIError(message, status_code=response.status_code, response_body=response.text, details=details)
         else:
@@ -407,6 +425,48 @@ class AISpine:
             if e.status_code == 404:
                 return False
             raise
+    
+    # User and Credits Management
+    
+    def get_current_user(self) -> Dict[str, Any]:
+        """Get current user info and credits.
+        
+        Returns:
+            Dictionary containing user information including:
+                - id (str): User identifier
+                - email (str): User email
+                - credits (int): Remaining credits
+                - plan (str): Current subscription plan
+        
+        Raises:
+            AuthenticationError: If API key is invalid
+            APIError: If request fails
+        
+        Example:
+            >>> client = AISpine(api_key="sk_your_api_key")
+            >>> user = client.get_current_user()
+            >>> print(f"User: {user['email']}, Credits: {user['credits']}")
+        """
+        return self._request("GET", "/api/v1/users/me")
+    
+    def check_credits(self) -> int:
+        """Check remaining credits before making expensive calls.
+        
+        Returns:
+            Number of remaining credits
+        
+        Raises:
+            AuthenticationError: If API key is invalid
+            APIError: If request fails
+        
+        Example:
+            >>> client = AISpine(api_key="sk_your_api_key")
+            >>> credits = client.check_credits()
+            >>> if credits < 10:
+            ...     print("Low on credits!")
+        """
+        user = self.get_current_user()
+        return user.get("credits", 0)
     
     # System Operations
     

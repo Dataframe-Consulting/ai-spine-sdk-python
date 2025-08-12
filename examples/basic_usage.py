@@ -1,14 +1,24 @@
 """Basic usage example for AI Spine SDK."""
 
-from ai_spine import AISpine
+from ai_spine import Client
 
 
 def main():
-    # Initialize the client
-    client = AISpine(
-        # api_key="your-api-key",  # Optional - currently not required
+    # Initialize the client with your API key
+    # Get your API key from https://ai-spine.com/dashboard
+    client = Client(
+        api_key="sk_your_api_key_here",  # Required - use your personal API key
         # base_url="https://custom-api.ai-spine.com"  # Optional - uses production by default
     )
+    
+    # Check your credits before making expensive calls
+    try:
+        credits = client.check_credits()
+        print(f"Remaining credits: {credits}")
+        if credits < 10:
+            print("Warning: Low on credits! Top up at https://ai-spine.com/billing")
+    except Exception as e:
+        print(f"Error checking credits: {e}")
     
     # Example 1: Execute a flow and wait for completion
     print("Example 1: Execute and wait for flow completion")
@@ -81,8 +91,21 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
     
-    # Example 4: Check system health
-    print("\nExample 4: System health check")
+    # Example 4: Get current user info
+    print("\nExample 4: Get current user info")
+    print("-" * 50)
+    
+    try:
+        user = client.get_current_user()
+        print(f"User: {user.get('email', 'Unknown')}")
+        print(f"Credits: {user.get('credits', 0)}")
+        print(f"Plan: {user.get('plan', 'Unknown')}")
+    
+    except Exception as e:
+        print(f"Error: {e}")
+    
+    # Example 5: Check system health
+    print("\nExample 5: System health check")
     print("-" * 50)
     
     try:

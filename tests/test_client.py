@@ -3,38 +3,64 @@
 import pytest
 import responses
 import json
-from ai_spine import AISpine, ValidationError, AuthenticationError, APIError
+import warnings
+from ai_spine import AISpine, Client, ValidationError, AuthenticationError, APIError, InsufficientCreditsError, RateLimitError, ExecutionError
 
 
 class TestClientInitialization:
     """Test client initialization."""
     
-    def test_default_initialization(self):
-        """Test client with default settings."""
-        client = AISpine()
+    def test_api_key_required(self):
+        """Test that API key is required."""
+        with pytest.raises(ValueError, match="API key is required"):
+            client = AISpine(api_key="")
+        
+        with pytest.raises(ValueError, match="API key is required"):
+            client = AISpine(api_key=None)
+    
+    def test_api_key_warning(self):
+        """Test warning for invalid API key format."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            client = AISpine(api_key="invalid_key_format")
+            assert len(w) == 1
+            assert "API key should start with 'sk_'" in str(w[0].message)
+    
+    def test_valid_api_key(self):
+        """Test client with valid API key."""
+        client = AISpine(api_key="sk_test_key")
+        assert client.api_key == "sk_test_key"
         assert client.base_url == "https://ai-spine-api-production.up.railway.app"
         assert client.timeout == 30
-        assert client.api_key is None
         assert client.debug is False
     
     def test_custom_initialization(self):
         """Test client with custom settings."""
         client = AISpine(
-            api_key="test-key",
-            base_url="https://custom.ai-spine.com",
+            api_key="sk_test_key",
+            base_url="https://custom.ai-spine.com/",  # Test trailing slash removal
             timeout=60,
             max_retries=5,
             debug=True
         )
-        assert client.api_key == "test-key"
-        assert client.base_url == "https://custom.ai-spine.com"
+        assert client.api_key == "sk_test_key"
+        assert client.base_url == "https://custom.ai-spine.com"  # Trailing slash removed
         assert client.timeout == 60
         assert client.debug is True
     
+    def test_client_alias(self):
+        """Test Client alias works."""
+        client = Client(api_key="sk_test_key")
+        assert client.api_key == "sk_test_key"
+        assert isinstance(client, AISpine)
+    
     def test_context_manager(self):
         """Test client as context manager."""
-        with AISpine() as client:
+        with AISpine(api_key="sk_test_key") as client:
             assert client.session is not None
+            # Check Authorization header is set
+            assert "Authorization" in client.session.headers
+            assert client.session.headers["Authorization"] == "Bearer sk_test_key"
 
 
 class TestFlowExecution:
@@ -291,6 +317,67 @@ class TestSystemOperations:
         assert status["status"] == "operational"
 
 
+class TestUserAndCredits:
+    """Test user and credits management."""
+    
+    @responses.activate
+    def test_get_current_user(self, client, base_url):
+        """Test getting current user info."""
+        responses.add(
+            responses.GET,
+            f"{base_url}/api/v1/users/me",
+            json={
+                "id": "user-123",
+                "email": "test@example.com",
+                "credits": 1000,
+                "plan": "pro"
+            },
+            status=200
+        )
+        
+        user = client.get_current_user()
+        assert user["id"] == "user-123"
+        assert user["email"] == "test@example.com"
+        assert user["credits"] == 1000
+        assert user["plan"] == "pro"
+    
+    @responses.activate
+    def test_check_credits(self, client, base_url):
+        """Test checking credits."""
+        responses.add(
+            responses.GET,
+            f"{base_url}/api/v1/users/me",
+            json={
+                "id": "user-123",
+                "email": "test@example.com",
+                "credits": 500,
+                "plan": "basic"
+            },
+            status=200
+        )
+        
+        credits = client.check_credits()
+        assert credits == 500
+    
+    @responses.activate
+    def test_check_credits_zero(self, client, base_url):
+        """Test checking credits when user has none."""
+        responses.add(
+            responses.GET,
+            f"{base_url}/api/v1/users/me",
+            json={
+                "id": "user-123",
+                "email": "test@example.com",
+                "plan": "basic"
+                # No credits field
+            },
+            status=200
+        )
+        
+        credits = client.check_credits()
+        assert credits == 0
+
+
 class TestErrorHandling:
     """Test error handling."""
     
@@ -307,6 +394,7 @@ class TestErrorHandling:
         with pytest.raises(AuthenticationError) as exc_info:
             client.list_flows()
         assert "Invalid API key" in str(exc_info.value)
+        assert "https://ai-spine.com/dashboard" in str(exc_info.value)
     
     @responses.activate
     def test_validation_error(self, client, base_url):
@@ -323,6 +411,28 @@ class TestErrorHandling:
         assert "Invalid input data" in str(exc_info.value)
     
     @responses.activate
+    def test_insufficient_credits_error(self, client, base_url):
+        """Test insufficient credits error handling."""
+        responses.add(
+            responses.POST,
+            f"{base_url}/flows/execute",
+            json={
+                "message": "No credits remaining",
+                "error_code": "INSUFFICIENT_CREDITS",
+                "credits_needed": 10,
+                "credits_available": 0
+            },
+            status=403
+        )
+        
+        with pytest.raises(InsufficientCreditsError) as exc_info:
+            client.execute_flow("test-flow", {"data": "test"})
+        assert "No credits remaining" in str(exc_info.value)
+        assert "https://ai-spine.com/billing" in str(exc_info.value)
+        assert exc_info.value.credits_needed == 10
+        assert exc_info.value.credits_available == 0
+    
+    @responses.activate
     def test_rate_limit_error(self, client, base_url):
         """Test rate limit error handling."""
         responses.add(
@@ -335,6 +445,7 @@ class TestErrorHandling:
         
         with pytest.raises(RateLimitError) as exc_info:
             client.list_flows()
+        assert "Rate limit exceeded" in str(exc_info.value)
         assert exc_info.value.retry_after == 60
     
     @responses.activate

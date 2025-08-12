@@ -14,7 +14,7 @@ def base_url():
 @pytest.fixture
 def client(base_url):
     """Create AI Spine client for testing."""
-    return AISpine(base_url=base_url)
+    return AISpine(api_key="sk_test_key_123", base_url=base_url, max_retries=0)  # Disable retries for testing
 
 
 @pytest.fixture

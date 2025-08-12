@@ -61,6 +61,19 @@ class RateLimitError(AISpineError):
         self.retry_after = retry_after
 
 
+class InsufficientCreditsError(AISpineError):
+    """Raised when user has insufficient credits."""
+    
+    def __init__(
+        self,
+        message: str,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(message, details)
+        self.credits_needed = details.get("credits_needed") if details else None
+        self.credits_available = details.get("credits_available") if details else None
+
+
 class NetworkError(AISpineError):
     """Raised when network-related errors occur."""
     pass
