@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [2.2.2] - 2025-01-13
+### Added
+- Dynamic changelog extraction for GitHub releases
+- CHANGELOG.md for tracking version history
+
+### Changed
+- Simplified CHANGELOG format (removed boilerplate)
+- GitHub Actions workflow now uses CHANGELOG.md for release notes
+
 ## [2.2.1] - 2025-01-13
 ### Added
 - GitHub Actions CI/CD workflow for automatic PyPI deployment
