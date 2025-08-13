@@ -95,44 +95,32 @@ jobs:
         VERSION=$(python -c "from ai_spine.__version__ import __version__; print(__version__)")
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
     
+    - name: Extract changelog
+      id: changelog
+      run: |
+        VERSION=${{ steps.get_version.outputs.VERSION }}
+        # Extract the section for this version from CHANGELOG.md
+        CHANGELOG=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d' || echo "")
+        
+        # If no specific version section found, use a default message
+        if [ -z "$CHANGELOG" ]; then
+          CHANGELOG="## AI Spine SDK v$VERSION
+
+        This release includes various improvements and bug fixes.
+        
+        See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details."
+        fi
+        
+        # Write to file to preserve formatting
+        echo "$CHANGELOG" > release_notes.md
+        echo "Release notes saved to release_notes.md"
+    
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: v${{ steps.get_version.outputs.VERSION }}
         name: Release v${{ steps.get_version.outputs.VERSION }}
-        body: |
-          ## AI Spine SDK v${{ steps.get_version.outputs.VERSION }}
-          
-          ### Breaking Changes
-          - API key is now required (no default value)
-          - API key must start with 'sk_' prefix
-          - New exception: InsufficientCreditsError for credit management
-          
-          ### New Features
-          - Added `get_current_user()` method to get user info and credits
-          - Added `check_credits()` method to check remaining credits
-          - Better error handling for 401, 403, and 429 status codes
-          - Support for custom base_url with trailing slash handling
-          
-          ### Installation
-          ```bash
-          pip install ai-spine-sdk==${{ steps.get_version.outputs.VERSION }}
-          ```
-          
-          ### Quick Start
-          ```python
-          from ai_spine import Client
-          
-          # Initialize with your API key
-          client = Client(api_key="sk_your_api_key_here")
-          
-          # Check your credits
-          credits = client.check_credits()
-          print(f"Remaining credits: {credits}")
-          
-          # Execute a flow
-          result = client.execute_flow("flow_id", {"data": "value"})
-          ```
+        body_path: release_notes.md
         draft: false
         prerelease: false
         generate_release_notes: true
