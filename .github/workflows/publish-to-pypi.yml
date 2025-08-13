@@ -1,0 +1,142 @@
+name: Publish to PyPI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ai_spine/__version__.py'  # Auto-deploy cuando cambia la versión
+  release:
+    types: [published]  # Cuando se crea un release en GitHub
+  push:
+    tags:
+      - 'v*'  # Cuando se pushea un tag v2.2.0, v2.3.0, etc.
+  workflow_dispatch:  # Permite ejecutar manualmente desde GitHub
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.7', '3.8', '3.9', '3.10', '3.11']
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+    
+    - name: Run tests
+      run: |
+        pytest tests/
+    
+    - name: Check code quality
+      run: |
+        black --check ai_spine tests
+        flake8 ai_spine tests
+        mypy ai_spine
+
+  build-and-publish:
+    name: Build and Publish to PyPI
+    needs: test  # Solo ejecutar después de que los tests pasen
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+    
+    - name: Build package
+      run: python -m build
+    
+    - name: Check package with twine
+      run: twine check dist/*
+    
+    - name: Publish to Test PyPI (optional)
+      # Primero publicar en Test PyPI para verificar
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+      run: |
+        twine upload --repository testpypi dist/*
+      continue-on-error: true  # No fallar si Test PyPI falla
+    
+    - name: Publish to PyPI
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        twine upload dist/*
+
+  create-release:
+    name: Create GitHub Release
+    needs: build-and-publish
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Get version
+      id: get_version
+      run: |
+        VERSION=$(python -c "from ai_spine.__version__ import __version__; print(__version__)")
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.get_version.outputs.VERSION }}
+        name: Release v${{ steps.get_version.outputs.VERSION }}
+        body: |
+          ## AI Spine SDK v${{ steps.get_version.outputs.VERSION }}
+          
+          ### Breaking Changes
+          - API key is now required (no default value)
+          - API key must start with 'sk_' prefix
+          - New exception: InsufficientCreditsError for credit management
+          
+          ### New Features
+          - Added `get_current_user()` method to get user info and credits
+          - Added `check_credits()` method to check remaining credits
+          - Better error handling for 401, 403, and 429 status codes
+          - Support for custom base_url with trailing slash handling
+          
+          ### Installation
+          ```bash
+          pip install ai-spine-sdk==${{ steps.get_version.outputs.VERSION }}
+          ```
+          
+          ### Quick Start
+          ```python
+          from ai_spine import Client
+          
+          # Initialize with your API key
+          client = Client(api_key="sk_your_api_key_here")
+          
+          # Check your credits
+          credits = client.check_credits()
+          print(f"Remaining credits: {credits}")
+          
+          # Execute a flow
+          result = client.execute_flow("flow_id", {"data": "value"})
+          ```
+        draft: false
+        prerelease: false
+        generate_release_notes: true
