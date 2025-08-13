@@ -4,10 +4,9 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'ai_spine/__version__.py'  # Auto-deploy cuando cambia la versión
-    tags:
-      - 'v*'  # Cuando se pushea un tag v2.2.0, v2.3.0, etc.
+  pull_request:
+    branches:
+      - main
   release:
     types: [published]  # Cuando se crea un release en GitHub
   workflow_dispatch:  # Permite ejecutar manualmente desde GitHub
