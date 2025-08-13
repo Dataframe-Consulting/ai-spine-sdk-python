@@ -38,7 +38,7 @@ setup(
         "Operating System :: OS Independent",
         "Typing :: Typed",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=[
         "requests>=2.28.0,<3.0.0",
         "typing-extensions>=4.0.0;python_version<'3.8'",
