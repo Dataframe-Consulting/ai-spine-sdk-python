@@ -11,6 +11,10 @@ on:
     types: [published]  # Cuando se crea un release en GitHub
   workflow_dispatch:  # Permite ejecutar manualmente desde GitHub
 
+permissions:
+  contents: write  # Necesario para crear releases
+  packages: write  # Necesario para publicar paquetes
+
 jobs:
   test:
     name: Run Tests
