@@ -42,15 +42,31 @@ Examples:
 - `2.2.0` → `2.3.0`: New feature (e.g., new methods, new optional parameters)
 - `2.2.0` → `2.2.1`: Bug fix or documentation update
 
-### Deployment Process
-1. Update version in `ai_spine/__version__.py`
-2. Commit with message: `chore: bump version to X.Y.Z`
-3. Push to main
-4. GitHub Actions will automatically:
+### 📝 Release Process
+**CRITICAL**: Before deploying a new version, you MUST:
+
+1. **Update CHANGELOG.md** (MUST be written in English):
+   - Move changes from `[Unreleased]` section to a new version section
+   - Add the version number and current date
+   - Format: `## [X.Y.Z] - YYYY-MM-DD`
+   - List all changes under appropriate categories (Added, Changed, Fixed, etc.)
+   - Use clear, concise English for all descriptions
+
+2. **Update version**:
+   - Edit `ai_spine/__version__.py` with the new version number
+
+3. **Commit and deploy**:
+   ```bash
+   git add CHANGELOG.md ai_spine/__version__.py
+   git commit -m "chore: release vX.Y.Z"
+   git push origin main
+   ```
+
+4. **GitHub Actions will automatically**:
    - Run tests
    - Build package
    - Publish to PyPI
-   - Create GitHub release
+   - Create GitHub release with notes from CHANGELOG.md
 
 ## Architecture
 
