@@ -1,7 +1,7 @@
 """Constants for AI Spine SDK."""
 
 # Default API configuration
-DEFAULT_BASE_URL = "https://ai-spine-api-production.up.railway.app"
+DEFAULT_BASE_URL = "https://ai-spine-api.up.railway.app"
 DEFAULT_TIMEOUT = 30  # seconds
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_POLLING_INTERVAL = 2  # seconds
@@ -14,12 +14,12 @@ ENDPOINTS = {
     "get_execution": "/executions/{execution_id}",
     "list_flows": "/flows",
     "get_flow": "/flows/{flow_id}",
-    
+
     # Agent endpoints
     "list_agents": "/agents",
     "create_agent": "/agents",
     "delete_agent": "/agents/{agent_id}",
-    
+
     # System endpoints
     "health": "/health",
     "metrics": "/metrics",

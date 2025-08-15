@@ -88,7 +88,7 @@ ai_spine/
 4. **Error Handling**: Custom exception hierarchy mapping HTTP status codes to specific exceptions
 
 ### API Integration
-- **Base URL**: `https://ai-spine-api-production.up.railway.app`
+- **Base URL**: `https://ai-spine-api.up.railway.app`
 - **Authentication**: API key required (must start with `sk_` prefix)
 - **Key Endpoints**:
   - `POST /flows/execute` - Execute AI flows
