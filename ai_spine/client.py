@@ -124,6 +124,7 @@ class AISpine:
         endpoint: str,
         data: Optional[Dict[str, Any]] = None,
         params: Optional[Dict[str, Any]] = None,
+        auth_required: bool = True,
         **path_params: str
     ) -> Dict[str, Any]:
         """Make HTTP request to API.
@@ -133,6 +134,7 @@ class AISpine:
             endpoint: API endpoint path
             data: Request body data
             params: Query parameters
+            auth_required: Whether to include authentication headers
             **path_params: Path parameters to replace in endpoint
             
         Returns:
@@ -149,12 +151,22 @@ class AISpine:
                 logger.debug(f"Request body: {json.dumps(data, indent=2)}")
         
         try:
+            # Prepare headers
+            headers = None
+            if not auth_required:
+                # For unauthenticated requests, use headers without Authorization
+                headers = {
+                    "Content-Type": "application/json",
+                    "User-Agent": f"ai-spine-sdk-python/{__version__}"
+                }
+            
             response = self.session.request(
                 method=method,
                 url=url,
                 json=data,
                 params=params,
-                timeout=self.timeout
+                timeout=self.timeout,
+                headers=headers  # Override session headers if provided
             )
             
             if self.debug:
@@ -448,6 +460,108 @@ class AISpine:
             >>> print(f"User: {user['email']}, Credits: {user['credits']}")
         """
         return self._request("GET", "/api/v1/users/me")
+    
+    def check_user_api_key(self, user_id: str) -> Dict[str, Any]:
+        """Check if a user has an API key generated.
+        
+        Note: This endpoint does not require authentication.
+        
+        Args:
+            user_id: Supabase Auth user ID
+            
+        Returns:
+            Dictionary containing:
+                - has_api_key (bool): Whether user has an API key
+                - api_key (str|None): The API key if it exists
+                - credits (int): Available credits
+                - rate_limit (int): Rate limit for the user
+                - created_at (str): When the key was created
+                - last_used_at (str|None): Last usage timestamp
+        
+        Raises:
+            ValidationError: If user_id is invalid
+            APIError: If request fails
+        
+        Example:
+            >>> client = AISpine(api_key="sk_any_key")  # API key not used for this endpoint
+            >>> status = client.check_user_api_key("123e4567-e89b-12d3-a456-426614174000")
+            >>> if status["has_api_key"]:
+            ...     print(f"User has API key: {status['api_key']}")
+        """
+        if not user_id:
+            raise ValidationError("User ID is required")
+        
+        return self._request(
+            "GET",
+            "/api/v1/user/keys/my-key",
+            params={"user_id": user_id},
+            auth_required=False
+        )
+    
+    def generate_user_api_key(self, user_id: str) -> Dict[str, Any]:
+        """Generate or regenerate API key for a user.
+        
+        Note: This endpoint does not require authentication.
+        
+        Args:
+            user_id: Supabase Auth user ID
+            
+        Returns:
+            Dictionary containing:
+                - message (str): Success message
+                - api_key (str): The generated API key
+                - action (str): "created" or "regenerated"
+        
+        Raises:
+            ValidationError: If user_id is invalid
+            APIError: If request fails
+        
+        Example:
+            >>> client = AISpine(api_key="sk_any_key")  # API key not used for this endpoint
+            >>> result = client.generate_user_api_key("123e4567-e89b-12d3-a456-426614174000")
+            >>> print(f"API Key {result['action']}: {result['api_key']}")
+        """
+        if not user_id:
+            raise ValidationError("User ID is required")
+        
+        return self._request(
+            "POST",
+            "/api/v1/user/keys/generate",
+            data={"user_id": user_id},
+            auth_required=False
+        )
+    
+    def revoke_user_api_key(self, user_id: str) -> Dict[str, Any]:
+        """Revoke (delete) a user's API key.
+        
+        Note: This endpoint does not require authentication.
+        
+        Args:
+            user_id: Supabase Auth user ID
+            
+        Returns:
+            Dictionary containing:
+                - message (str): Success message
+                - status (str): "revoked"
+        
+        Raises:
+            ValidationError: If user_id is invalid
+            APIError: If request fails
+        
+        Example:
+            >>> client = AISpine(api_key="sk_any_key")  # API key not used for this endpoint
+            >>> result = client.revoke_user_api_key("123e4567-e89b-12d3-a456-426614174000")
+            >>> print(result['message'])
+        """
+        if not user_id:
+            raise ValidationError("User ID is required")
+        
+        return self._request(
+            "DELETE",
+            "/api/v1/user/keys/revoke",
+            data={"user_id": user_id},
+            auth_required=False
+        )
     
     def check_credits(self) -> int:
         """Check remaining credits before making expensive calls.
