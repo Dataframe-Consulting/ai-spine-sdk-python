@@ -378,6 +378,140 @@ class TestUserAndCredits:
         assert credits == 0
 
 
+class TestAPIKeyManagement:
+    """Test API key management methods."""
+    
+    @responses.activate
+    def test_check_user_api_key_exists(self, client, base_url):
+        """Test checking user API key when it exists."""
+        user_id = "123e4567-e89b-12d3-a456-426614174000"
+        responses.add(
+            responses.GET,
+            f"{base_url}/api/v1/user/keys/my-key",
+            json={
+                "has_api_key": True,
+                "api_key": "sk_user_test_key",
+                "credits": 1000,
+                "rate_limit": 100,
+                "created_at": "2024-01-01T00:00:00Z",
+                "last_used_at": "2024-01-02T00:00:00Z"
+            },
+            status=200
+        )
+        
+        result = client.check_user_api_key(user_id)
+        assert result["has_api_key"] is True
+        assert result["api_key"] == "sk_user_test_key"
+        assert result["credits"] == 1000
+        assert result["rate_limit"] == 100
+        assert result["created_at"] == "2024-01-01T00:00:00Z"
+        assert result["last_used_at"] == "2024-01-02T00:00:00Z"
+    
+    @responses.activate
+    def test_check_user_api_key_not_exists(self, client, base_url):
+        """Test checking user API key when it doesn't exist."""
+        user_id = "123e4567-e89b-12d3-a456-426614174000"
+        responses.add(
+            responses.GET,
+            f"{base_url}/api/v1/user/keys/my-key",
+            json={
+                "has_api_key": False,
+                "api_key": None,
+                "credits": 0,
+                "rate_limit": 0,
+                "created_at": None,
+                "last_used_at": None
+            },
+            status=200
+        )
+        
+        result = client.check_user_api_key(user_id)
+        assert result["has_api_key"] is False
+        assert result["api_key"] is None
+    
+    def test_check_user_api_key_invalid_user_id(self, client):
+        """Test checking API key with invalid user ID."""
+        with pytest.raises(ValidationError, match="User ID is required"):
+            client.check_user_api_key("")
+        
+        with pytest.raises(ValidationError, match="User ID is required"):
+            client.check_user_api_key(None)
+    
+    @responses.activate
+    def test_generate_user_api_key_create(self, client, base_url):
+        """Test generating API key for first time."""
+        user_id = "123e4567-e89b-12d3-a456-426614174000"
+        responses.add(
+            responses.POST,
+            f"{base_url}/api/v1/user/keys/generate",
+            json={
+                "message": "API key created successfully",
+                "api_key": "sk_new_user_key",
+                "action": "created"
+            },
+            status=200
+        )
+        
+        result = client.generate_user_api_key(user_id)
+        assert result["message"] == "API key created successfully"
+        assert result["api_key"] == "sk_new_user_key"
+        assert result["action"] == "created"
+    
+    @responses.activate
+    def test_generate_user_api_key_regenerate(self, client, base_url):
+        """Test regenerating existing API key."""
+        user_id = "123e4567-e89b-12d3-a456-426614174000"
+        responses.add(
+            responses.POST,
+            f"{base_url}/api/v1/user/keys/generate",
+            json={
+                "message": "API key regenerated successfully",
+                "api_key": "sk_regenerated_key",
+                "action": "regenerated"
+            },
+            status=200
+        )
+        
+        result = client.generate_user_api_key(user_id)
+        assert result["message"] == "API key regenerated successfully"
+        assert result["api_key"] == "sk_regenerated_key"
+        assert result["action"] == "regenerated"
+    
+    def test_generate_user_api_key_invalid_user_id(self, client):
+        """Test generating API key with invalid user ID."""
+        with pytest.raises(ValidationError, match="User ID is required"):
+            client.generate_user_api_key("")
+        
+        with pytest.raises(ValidationError, match="User ID is required"):
+            client.generate_user_api_key(None)
+    
+    @responses.activate
+    def test_revoke_user_api_key_success(self, client, base_url):
+        """Test revoking user API key."""
+        user_id = "123e4567-e89b-12d3-a456-426614174000"
+        responses.add(
+            responses.DELETE,
+            f"{base_url}/api/v1/user/keys/revoke",
+            json={
+                "message": "API key revoked successfully",
+                "status": "revoked"
+            },
+            status=200
+        )
+        
+        result = client.revoke_user_api_key(user_id)
+        assert result["message"] == "API key revoked successfully"
+        assert result["status"] == "revoked"
+    
+    def test_revoke_user_api_key_invalid_user_id(self, client):
+        """Test revoking API key with invalid user ID."""
+        with pytest.raises(ValidationError, match="User ID is required"):
+            client.revoke_user_api_key("")
+        
+        with pytest.raises(ValidationError, match="User ID is required"):
+            client.revoke_user_api_key(None)
+
+
 class TestErrorHandling:
     """Test error handling."""
     
