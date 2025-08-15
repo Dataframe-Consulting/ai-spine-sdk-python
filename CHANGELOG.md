@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [2.3.0] - 2025-01-14
+### Added
+- New API key management methods for user administration (no authentication required):
+  - `check_user_api_key()` - Check if a user has an API key and get its details
+  - `generate_user_api_key()` - Generate or regenerate API key for a user
+  - `revoke_user_api_key()` - Revoke (delete) a user's API key
+- Support for unauthenticated API requests via `auth_required` parameter in `_request()` method
+- New example script `api_key_management.py` demonstrating API key operations
+- Comprehensive test coverage for all new API key management methods
+
+### Changed
+- Enhanced authentication system to support manual API key generation
+- API key management endpoints do not require Bearer token authentication
+- Updated base URL to `https://ai-spine-api.up.railway.app` in examples
+- Updated documentation to clarify authentication requirements
+
 ## [2.2.2] - 2025-01-13
 ### Added
 - Dynamic changelog extraction for GitHub releases
